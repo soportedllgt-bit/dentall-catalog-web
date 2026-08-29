@@ -14,10 +14,18 @@ http://localhost:8000/index.html?pdf=ortodoncia.pdf&page=1
 
 | Parámetro | Tipo | Requerido | Descripción |
 |-----------|------|-----------|-------------|
-| `pdf` | String | Sí | Nombre del archivo PDF en `./assets/` |
+| `pdf` | String | No* | Nombre del archivo PDF en `./assets/` |
 | `page` | Integer | No | Página inicial (default: `1`) |
+| `ref` | UUID | No* | UUID del elemento a mostrar (resuelve a página automáticamente) |
 
-Si se accede sin parámetros, redirige automáticamente a `?pdf=ortodoncia.pdf&page=1`.
+\* Si no se proporciona `pdf` ni `ref`, redirige a `?pdf=ortodoncia.pdf&page=1`.
+
+**Modo UUID:** Al usar `?ref=<uuid>`, el visor extrae el texto de todas las páginas del PDF, localiza el UUID en el footer, y navega a la página correspondiente. Si el UUID no se encuentra, muestra un mensaje indicando que el catálogo fue actualizado.
+
+Ejemplo de URL con UUID:
+```
+http://localhost:8000/index.html?ref=550e8400-e29b-41d4-a716-446655440000
+```
 
 ## Estructura
 
@@ -81,6 +89,7 @@ Content-Type: application/json
 - Footer con información de contacto por país (Guatemala, El Salvador, Honduras)
 - Redirección automática al catálogo por defecto
 - Tracking de escaneos vía API (fire-and-forget)
+- Referenciación permanente de páginas mediante UUID (resolución client-side)
 
 ## Paleta de colores
 

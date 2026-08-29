@@ -13,6 +13,8 @@ All libraries via CDN. No `package.json`, no bundler, no linter, no tests.
 - **State variables are module-scoped** inside an IIFE in `js/app.js`. Not on `window`.
 - **PDFs live in `./assets/`**. URL routing: `index.html?pdf=filename.pdf&page=N`.
 - **Default PDF**: when no `?pdf=` param, redirects to `ortodoncia.pdf&page=1`.
+- **UUID routing**: `?ref=UUID` resolves UUID → page via client-side text extraction (`buildUuidMap()`).
+  Requires PDF with UUIDs in footer (6pt text, UUID v4 format). If no `?pdf=` is provided alongside `?ref=`, defaults to `ortodoncia.pdf`.
 - **Tracking API**: `POST http://localhost/dentall-catalog-api/api/v1/tracking/scan` with Basic Auth. Fire-and-forget on each page load. Does not block the visor.
 - Do not add npm packages or build steps. Everything is CDN-loaded (Bootstrap 5.3.3, Bootstrap Icons 1.11.3, PDF.js 3.11.174).
 
@@ -46,7 +48,7 @@ The footer is always visible below the scroll area.
 | `SDD.md` | Architecture + contracts (read before changing anything) |
 | `index.html` | Header, viewer, footer, CDN script/style tags, DOM IDs |
 | `css/styles.css` | Variables, layout, responsive, overflow scroll |
-| `js/app.js` | PDF loading, render loop, queue system, zoom, download, tracking |
+| `js/app.js` | PDF loading, render loop, queue system, zoom, download, tracking, UUID resolution |
 | `assets/` | PDFs, logo, favicons — served statically |
 
 ## Verification
@@ -58,3 +60,4 @@ No automated tests. Manual check: open via HTTP with `?pdf=ortodoncia.pdf&page=1
 - Footer visible with 3 country columns + copyright.
 - Missing `?pdf=` redirects to the default catalog.
 - Check browser DevTools Network tab: POST to `/api/v1/tracking/scan` fires on page load.
+- UUID routing: `?ref=<valid-uuid>` resolves to correct page. Invalid UUID shows error. Unknown UUID shows "solicite nuevo código QR".

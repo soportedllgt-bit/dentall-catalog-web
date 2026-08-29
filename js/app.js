@@ -22,19 +22,59 @@
     const btnZoomOut = document.getElementById('btn-zoom-out');
     const btnDownload = document.getElementById('btn-download');
     const errorMessage = document.getElementById('error-message');
+    const errorText = document.getElementById('error-text');
 
     // ── Configuración de la API de tracking ──
     const API_BASE = 'http://localhost/dentall-catalog-api/api/v1';
     const API_AUTH = 'Basic ' + btoa('admin:secret');
 
+    // ── UUID ──
+    const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    const DEFAULT_PDF = 'ortodoncia.pdf';
+
     // ── Utilidades ──
 
-    function showError() {
+    function showError(msg) {
+        if (msg) {
+            errorText.textContent = msg;
+        }
         errorMessage.classList.remove('d-none');
     }
 
     function hideError() {
         errorMessage.classList.add('d-none');
+    }
+
+    /**
+     * Valida si una cadena tiene formato UUID v4.
+     * @param {string} str
+     * @returns {boolean}
+     */
+    function isValidUuid(str) {
+        return typeof str === 'string' && UUID_REGEX.test(str);
+    }
+
+    /**
+     * Extrae el UUID de cada página y construye un mapping UUID → número de página.
+     * @param {Object} pdfDoc - Documento PDF cargado por PDF.js.
+     * @returns {Promise<Map<string, number>>}
+     */
+    async function buildUuidMap(pdfDoc) {
+        const uuidMap = new Map();
+        const totalPages = pdfDoc.numPages;
+
+        for (let i = 1; i <= totalPages; i++) {
+            const page = await pdfDoc.getPage(i);
+            const textContent = await page.getTextContent();
+            const pageText = textContent.items.map(item => item.str).join(' ');
+
+            const match = pageText.match(UUID_REGEX);
+            if (match) {
+                uuidMap.set(match[0].toLowerCase(), i);
+            }
+        }
+
+        return uuidMap;
     }
 
     /**
@@ -58,16 +98,17 @@
 
     /**
      * Extrae los parámetros de la URL (SDD §3).
-     * @returns {{ pdf: string|null, page: number }}
+     * @returns {{ pdf: string|null, page: number, ref: string|null }}
      */
     function getParamsFromUrl() {
         const params = new URLSearchParams(window.location.search);
         const pdfParam = params.get('pdf');
+        const refParam = params.get('ref');
         let pageParam = parseInt(params.get('page'), 10);
         if (isNaN(pageParam) || pageParam < 1) {
             pageParam = 1;
         }
-        return { pdf: pdfParam, page: pageParam };
+        return { pdf: pdfParam, page: pageParam, ref: refParam };
     }
 
     /**
@@ -166,11 +207,11 @@
     function onDownload() {
         if (!pdfDoc) return;
         const { pdf: pdfName } = getParamsFromUrl();
-        if (!pdfName) return;
+        const fileName = pdfName || DEFAULT_PDF;
 
         const link = document.createElement('a');
-        link.href = `./assets/${pdfName}`;
-        link.download = pdfName;
+        link.href = `./assets/${fileName}`;
+        link.download = fileName;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -179,21 +220,40 @@
     // ── Inicialización ──
 
     async function init() {
-        const { pdf: pdfName, page: initialPage } = getParamsFromUrl();
+        const { pdf: pdfName, page: initialPage, ref } = getParamsFromUrl();
 
-        if (!pdfName) {
-            window.location.replace('./index.html?pdf=ortodoncia.pdf&page=1');
+        if (!pdfName && !ref) {
+            window.location.replace(`./index.html?pdf=${DEFAULT_PDF}&page=1`);
+            return;
+        }
+
+        const pdfFile = pdfName || DEFAULT_PDF;
+
+        if (ref && !isValidUuid(ref)) {
+            showError('El enlace no es válido. Verifique el código QR.');
             return;
         }
 
         try {
-            const loadingTask = pdfjsLib.getDocument(`./assets/${pdfName}`);
+            const loadingTask = pdfjsLib.getDocument(`./assets/${pdfFile}`);
             pdfDoc = await loadingTask.promise;
 
-            if (initialPage > pdfDoc.numPages) {
-                pageNum = pdfDoc.numPages;
+            if (ref) {
+                const uuidMap = await buildUuidMap(pdfDoc);
+                const resolvedPage = uuidMap.get(ref.toLowerCase());
+
+                if (!resolvedPage) {
+                    showError('Este catálogo ha sido actualizado. Por favor, solicite un nuevo código QR.');
+                    return;
+                }
+
+                pageNum = resolvedPage;
             } else {
-                pageNum = initialPage;
+                if (initialPage > pdfDoc.numPages) {
+                    pageNum = pdfDoc.numPages;
+                } else {
+                    pageNum = initialPage;
+                }
             }
 
             updatePageInfo();
