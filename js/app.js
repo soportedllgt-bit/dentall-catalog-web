@@ -11,8 +11,10 @@
     let pageIsRendering = false;
     let pageNumPending = null;
     let scale = 1.5;
+    const PHONE_QUERY = window.matchMedia('(max-width: 576px)');
 
     // ── Referencias del DOM (SDD §5) ──
+    const viewerContainer = document.getElementById('viewer-container');
     const canvas = document.getElementById('pdf-render');
     const ctx = canvas.getContext('2d');
     const btnPrev = document.getElementById('btn-prev');
@@ -25,11 +27,12 @@
     const errorText = document.getElementById('error-text');
 
     // ── Configuración de la API de tracking ──
-    const API_BASE = 'http://localhost/dentall-catalog-api/api/v1';
+    const API_BASE = 'https://localhost.com/dentall-catalog-api/api/v1';
     const API_AUTH = 'Basic ' + btoa('admin:secret');
 
     // ── UUID ──
     const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    const UUID_SEARCH_REGEX = /[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/i;
     const DEFAULT_PDF = 'ortodoncia.pdf';
 
     // ── Utilidades ──
@@ -68,7 +71,7 @@
             const textContent = await page.getTextContent();
             const pageText = textContent.items.map(item => item.str).join(' ');
 
-            const match = pageText.match(UUID_REGEX);
+            const match = pageText.match(UUID_SEARCH_REGEX);
             if (match) {
                 uuidMap.set(match[0].toLowerCase(), i);
             }
@@ -112,6 +115,19 @@
     }
 
     /**
+     * En teléfonos, ajusta el zoom inicial para que la página quepa en el ancho del visor.
+     * @param {number} num - Página inicial.
+     * @returns {Promise<void>}
+     */
+    async function applyPhoneFitScale(num) {
+        if (!PHONE_QUERY.matches) return;
+        const page = await pdfDoc.getPage(num);
+        const baseWidth = page.getViewport({ scale: 1 }).width;
+        const availableWidth = viewerContainer.clientWidth - 20;
+        scale = availableWidth / baseWidth;
+    }
+
+    /**
      * Actualiza el texto de paginación.
      */
     function updatePageInfo() {
@@ -130,12 +146,16 @@
         try {
             const page = await pdfDoc.getPage(num);
             const viewport = page.getViewport({ scale });
-            canvas.height = viewport.height;
-            canvas.width = viewport.width;
+            const dpr = PHONE_QUERY.matches ? (window.devicePixelRatio || 1) : 1;
+            canvas.height = viewport.height * dpr;
+            canvas.width = viewport.width * dpr;
+            canvas.style.width = viewport.width + 'px';
+            canvas.style.height = viewport.height + 'px';
 
             const renderContext = {
                 canvasContext: ctx,
-                viewport
+                viewport,
+                transform: dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : null
             };
 
             await page.render(renderContext).promise;
@@ -256,6 +276,7 @@
                 }
             }
 
+            await applyPhoneFitScale(pageNum);
             updatePageInfo();
             await renderPage(pageNum);
             trackScan(pageNum);
